@@ -1,0 +1,44 @@
+pip install pytesseract pdf2image pandas openpyxl
+import pytesseract
+from pdf2image import convert_from_path
+import pandas as pd
+import re
+import os
+
+# === INSTELLINGEN ===
+PDF_PATH = "PGS_15_2025.pdf"  # Verander dit naar jouw PDF-bestandsnaam
+OUTPUT_CSV = "maatregelen_ocr.csv"
+PAGINA_START = 61
+PAGINA_EINDE = 90
+TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"  # ← Windows pad aanpassen
+
+# === Koppel Tesseract-EXE als nodig ===
+pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
+# === 1. PDF-pagina’s converteren naar afbeeldingen ===
+print("PDF-pagina’s omzetten naar afbeeldingen...")
+pages = convert_from_path(PDF_PATH, dpi=300, first_page=PAGINA_START, last_page=PAGINA_EINDE)
+
+# === 2. OCR uitvoeren ===
+print("OCR uitvoeren op pagina's {} t/m {}...".format(PAGINA_START, PAGINA_EINDE))
+full_text = ""
+for i, page in enumerate(pages, start=PAGINA_START):
+    text = pytesseract.image_to_string(page, lang="nld")
+    full_text += f"\n\n--- PAGINA {i} ---\n{text}"
+
+# === 3. Extract maatregelen met patroon M1, M2, ..., M165 ===
+print("Maatregelblokken extraheren...")
+maatregelen = re.findall(r"(M\d{1,3})(.*?)(?=\nM\d{1,3}\b|\Z)", full_text, flags=re.DOTALL)
+
+data = []
+for nummer, tekst in maatregelen:
+    data.append({
+        "Maatregelnummer": nummer.strip(),
+        "Tekst": tekst.strip()
+    })
+
+df = pd.DataFrame(data)
+
+# === 4. Opslaan naar CSV-bestand ===
+df.to_csv(OUTPUT_CSV, index=False)
+print(f"Klaar! {len(df)} maatregelen opgeslagen in: {OUTPUT_CSV}")
